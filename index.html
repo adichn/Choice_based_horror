@@ -35,6 +35,7 @@
             height: 100%;
             background-color: #00ff00;
             width: 0%;
+            transition: width 1s;
         }
         #narrative {
             background-color: #111;
@@ -95,6 +96,27 @@
             display: none;
             background-color: #111;
             padding: 15px;
+        }
+        /* Modal Styles */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed;
+            z-index: 100; /* On top */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.9); /* Black with opacity */
+        }
+        .modal-content {
+            position: relative;
+            margin: 15% auto;
+            padding: 20px;
+            width: 80%;
+            color: red;
+            text-align: center;
+            font-size: 3em;
         }
     </style>
 </head>
@@ -162,6 +184,29 @@
         <p>Flashlight (Hours Left): <span id="flashlight-charges">2</span></p>
         <p>Knife (Body Parts Remaining): <span id="knife-charges">3</span></p>
     </div>
+
+    <!-- Death Modal -->
+    <div id="death-modal" class="modal">
+        <div class="modal-content">
+            <h2>YOU WERE EATEN ALIVE</h2>
+        </div>
+    </div>
+
+    <!-- Win Modal -->
+    <div id="win-modal" class="modal">
+        <div class="modal-content">
+            <h2>YOU SURVIVED</h2>
+        </div>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="death-sound">
+        <source src="death-sound.mp3" type="audio/mpeg">
+    </audio>
+
+    <audio id="win-sound">
+        <source src="win-sound.mp3" type="audio/mpeg">
+    </audio>
 
     <script>
         class SurviveTheNight {
@@ -342,8 +387,8 @@
 
                 if (charges > 0) {
                     flashlightChargesElem.textContent = charges - 1;
-                    this.updateCreatureHunger(40); // Increase hunger by 40%
-                    return "The flashlight illuminates the darkness. The creature recoils but grows hungrier.";
+                    this.updateCreatureHunger(50); // Increase hunger by 50%
+                    return "The flashlight illuminates the darkness. The creature recoils but grows much hungrier.";
                 }
                 return "No battery left in the flashlight!";
             }
@@ -368,8 +413,7 @@
                         this.updateCreatureHunger(-40);
                         return "You spot a bunny outside. The creature goes to eat it, reducing its hunger.";
                     } else {
-                        alert("The creature hears you trying to escape and enters the room. You've been eaten!");
-                        location.reload();
+                        this.showDeathModal();
                         return;
                     }
                 }
@@ -383,8 +427,7 @@
                         this.updateCreatureHunger(-40);
                         return "You hear a bunny outside. The creature goes to eat it, reducing its hunger.";
                     } else {
-                        alert("The creature hears you trying to escape and enters the room. You've been eaten!");
-                        location.reload();
+                        this.showDeathModal();
                         return;
                     }
                 }
@@ -405,8 +448,8 @@
             }
 
             remainSilent() {
-                this.updateCreatureHunger(40); // Increase hunger by 40%
-                return "Silence fills the room. The creature's anticipation and hunger grow.";
+                this.updateCreatureHunger(50); // Increase hunger by 50%
+                return "Silence fills the room. The creature's anticipation and hunger grow significantly.";
             }
 
             advanceHour() {
@@ -416,8 +459,7 @@
                 this.lookActions = 0; // Reset look/listen actions per hour
 
                 if (this.currentHour > 8) {
-                    alert("Congratulations! You survived until rescue!");
-                    location.reload();
+                    this.showWinModal();
                 }
             }
 
@@ -433,8 +475,7 @@
                 creatureProgress.style.width = this.creatureHunger + '%';
 
                 if (this.creatureHunger >= 100) {
-                    alert("The creature's hunger overwhelms it. You've been eaten!");
-                    location.reload();
+                    this.showDeathModal();
                 }
             }
 
@@ -445,9 +486,22 @@
                 healthProgress.style.width = `${Math.max(health, 0)}%`;
 
                 if (health <= 0) {
-                    alert("You've sacrificed too much... you succumb to your injuries.");
-                    location.reload();
+                    this.showDeathModal();
                 }
+            }
+
+            showDeathModal() {
+                const deathModal = document.getElementById('death-modal');
+                deathModal.style.display = 'block';
+                const deathSound = document.getElementById('death-sound');
+                deathSound.play();
+            }
+
+            showWinModal() {
+                const winModal = document.getElementById('win-modal');
+                winModal.style.display = 'block';
+                const winSound = document.getElementById('win-sound');
+                winSound.play();
             }
         }
 
