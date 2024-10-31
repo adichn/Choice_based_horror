@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Survive the Night</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: black;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #game-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            grid-gap: 20px;
+            flex-grow: 1;
+        }
+        #status-bars {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #333;
+            position: relative;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #00ff00;
+            width: 0%;
+        }
+        #narrative {
+            background-color: #111;
+            padding: 15px;
+            overflow-y: auto;
+            min-height: 200px;
+        }
+        #dialogue-container {
+            background-color: #111;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        #dialogue-text {
+            margin-bottom: 15px;
+            min-height: 100px;
+        }
+        #dialogue-navigation {
+            display: flex;
+            justify-content: space-between;
+        }
+        #decision-window {
+            display: none;
+            background-color: #111;
+            padding: 15px;
+        }
+        #decision-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+        }
+        button {
+            background-color: #222;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #00ff00;
+            color: black;
+        }
+        button:disabled {
+            color: #444;
+            border-color: #444;
+            cursor: not-allowed;
+        }
+        #inventory {
+            background-color: #111;
+            padding: 15px;
+        }
+        #negotiation-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #negotiation-window {
+            display: none;
+            background-color: #111;
+            padding: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="status-bars">
+        <div style="width: 30%;">
+            <div>Time Progress</div>
+            <div class="progress-bar">
+                <div id="time-progress" class="progress-bar-fill"></div>
+            </div>
+        </div>
+        <div style="width: 30%;">
+            <div>Health</div>
+            <div class="progress-bar">
+                <div id="health-progress" class="progress-bar-fill" style="width: 100%; background-color: green;"></div>
+            </div>
+        </div>
+        <div style="width: 30%;">
+            <div>Creature Hunger</div>
+            <div class="progress-bar">
+                <div id="creature-progress" class="progress-bar-fill" style="background-color: red; width: 40%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div id="narrative">
+            Waiting to begin...
+        </div>
+        <div id="dialogue-container">
+            <div id="dialogue-text"></div>
+            <div id="dialogue-navigation">
+                <button id="prev-dialogue">Previous</button>
+                <button id="next-dialogue">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="decision-window">
+        <h3>Hour <span id="current-hour">1</span> Decision</h3>
+        <div id="decision-options">
+            <button id="use-flashlight">Use Flashlight</button>
+            <button id="cut-body-part">Cut Body Part</button>
+            <button id="look-window">Look Out Window</button>
+            <button id="listen-door">Listen at Door</button>
+            <button id="negotiate">Negotiate</button>
+            <button id="remain-silent">Remain Silent</button>
+        </div>
+    </div>
+
+    <div id="negotiation-window">
+        <h3>Negotiate with the Creature</h3>
+        <div id="negotiation-options">
+            <button data-option="live">"I have so long to live, please don't kill me"</button>
+            <button data-option="family">"I have a family"</button>
+            <button data-option="promise">"If you don't eat me this hour I'll let you eat a part next hour"</button>
+            <button data-option="insult">"Go to hell you asshole"</button>
+            <button data-option="distract">"Tell me about yourself"</button>
+            <button id="back-to-decisions">Back</button>
+        </div>
+    </div>
+
+    <div id="inventory">
+        <h3>Inventory</h3>
+        <p>Flashlight (Hours Left): <span id="flashlight-charges">2</span></p>
+        <p>Knife (Body Parts Remaining): <span id="knife-charges">3</span></p>
+    </div>
+
+    <script>
+        class SurviveTheNight {
+            constructor() {
+                this.dialogues = [
+                    "Welcome, human... You find yourself trapped in a room that whispers forgotten terrors.",
+                    "I am the hunger that lingers beyond mortal comprehension. You are my... sustenance.",
+                    "Eight hours stand between you and dawn. Eight hours between life and consumption.",
+                    "Your phone taunts you - rescue at 6 AM. If you survive me."
+                ];
+                this.currentDialogueIndex = 0;
+                this.currentHour = 1;
+                this.creatureHunger = 40; // Start at 40%
+                this.lookActions = 0;
+                this.distractCount = 0;
+                this.promiseMade = false;
+                this.promiseHour = 0;
+                document.getElementById('creature-progress').style.width = this.creatureHunger + '%';
+
+                this.initializeDialogue();
+                this.initializeDecisionButtons();
+                this.initializeNegotiationButtons();
+            }
+
+            initializeDialogue() {
+                const dialogueText = document.getElementById('dialogue-text');
+                const prevBtn = document.getElementById('prev-dialogue');
+                const nextBtn = document.getElementById('next-dialogue');
+
+                const updateDialogue = () => {
+                    dialogueText.textContent = this.dialogues[this.currentDialogueIndex];
+                    prevBtn.disabled = this.currentDialogueIndex === 0;
+
+                    if (this.currentDialogueIndex === this.dialogues.length - 1) {
+                        nextBtn.textContent = 'Start Game';
+                    } else {
+                        nextBtn.textContent = 'Next';
+                    }
+                };
+
+                prevBtn.addEventListener('click', () => {
+                    if (this.currentDialogueIndex > 0) {
+                        this.currentDialogueIndex--;
+                        updateDialogue();
+                    }
+                });
+
+                nextBtn.addEventListener('click', () => {
+                    if (this.currentDialogueIndex < this.dialogues.length - 1) {
+                        this.currentDialogueIndex++;
+                        updateDialogue();
+                    } else {
+                        this.startGame();
+                    }
+                });
+
+                updateDialogue();
+            }
+
+            initializeDecisionButtons() {
+                const decisionButtons = document.querySelectorAll('#decision-options button');
+                decisionButtons.forEach(button => {
+                    button.addEventListener('click', (e) => this.makeDecision(e.target.id));
+                });
+            }
+
+            initializeNegotiationButtons() {
+                const negotiationButtons = document.querySelectorAll('#negotiation-options button[data-option]');
+                negotiationButtons.forEach(button => {
+                    button.addEventListener('click', (e) => this.negotiateOption(e.target.dataset.option));
+                });
+
+                document.getElementById('back-to-decisions').addEventListener('click', () => {
+                    this.showNegotiation(false);
+                });
+            }
+
+            startGame() {
+                document.getElementById('dialogue-container').style.display = 'none';
+                document.getElementById('decision-window').style.display = 'block';
+                document.getElementById('current-hour').textContent = this.currentHour;
+                document.getElementById('narrative').textContent = "The creature watches you. Choose wisely.";
+
+                // Reset the next button text in case the game restarts
+                const nextBtn = document.getElementById('next-dialogue');
+                nextBtn.textContent = 'Next';
+            }
+
+            makeDecision(action) {
+                let narrativeText = '';
+
+                switch(action) {
+                    case 'use-flashlight':
+                        narrativeText = this.useFlashlight();
+                        this.advanceHour();
+                        break;
+                    case 'cut-body-part':
+                        narrativeText = this.cutBodyPart();
+                        this.advanceHour();
+                        break;
+                    case 'look-window':
+                        narrativeText = this.lookOutWindow();
+                        break;
+                    case 'listen-door':
+                        narrativeText = this.listenAtDoor();
+                        break;
+                    case 'negotiate':
+                        this.showNegotiation(true);
+                        return; // Do not proceed further
+                    case 'remain-silent':
+                        narrativeText = this.remainSilent();
+                        this.advanceHour();
+                        break;
+                }
+
+                document.getElementById('narrative').textContent = narrativeText;
+
+                // Check for promise fulfillment
+                if (this.promiseMade && this.currentHour === this.promiseHour + 1) {
+                    if (action !== 'cut-body-part') {
+                        this.updateCreatureHunger(40); // Increase hunger by 40% for breaking the promise
+                        document.getElementById('narrative').textContent += "\n\nYou broke your promise. The creature grows hungrier.";
+                    } else {
+                        this.promiseMade = false; // Promise fulfilled
+                    }
+                }
+            }
+
+            showNegotiation(show) {
+                document.getElementById('decision-window').style.display = show ? 'none' : 'block';
+                document.getElementById('negotiation-window').style.display = show ? 'block' : 'none';
+            }
+
+            negotiateOption(option) {
+                let narrativeText = '';
+                switch(option) {
+                    case 'live':
+                        this.updateCreatureHunger(20);
+                        narrativeText = "You express your will to live. The creature's hunger increases.";
+                        this.advanceHour();
+                        break;
+                    case 'family':
+                        this.updateCreatureHunger(20);
+                        narrativeText = "You mention your family. The creature seems unmoved and hungrier.";
+                        this.advanceHour();
+                        break;
+                    case 'promise':
+                        this.updateCreatureHunger(-40);
+                        narrativeText = "You promise to sacrifice a part next hour. The creature's hunger decreases.";
+                        this.promiseMade = true;
+                        this.promiseHour = this.currentHour;
+                        this.advanceHour();
+                        break;
+                    case 'insult':
+                        this.updateCreatureHunger(80);
+                        narrativeText = "You insult the creature. It becomes enraged and much hungrier.";
+                        this.advanceHour();
+                        break;
+                    case 'distract':
+                        if (this.distractCount >= 2) {
+                            this.updateCreatureHunger(40);
+                            narrativeText = "The creature grows suspicious of your distractions. Its hunger increases.";
+                        } else {
+                            this.updateCreatureHunger(-20);
+                            narrativeText = this.getCreatureStory();
+                            this.distractCount++;
+                        }
+                        this.advanceHour();
+                        break;
+                }
+                this.showNegotiation(false);
+                document.getElementById('narrative').textContent = narrativeText;
+            }
+
+            useFlashlight() {
+                const flashlightChargesElem = document.getElementById('flashlight-charges');
+                let charges = parseInt(flashlightChargesElem.textContent);
+
+                if (charges > 0) {
+                    flashlightChargesElem.textContent = charges - 1;
+                    this.updateCreatureHunger(40); // Increase hunger by 40%
+                    return "The flashlight illuminates the darkness. The creature recoils but grows hungrier.";
+                }
+                return "No battery left in the flashlight!";
+            }
+
+            cutBodyPart() {
+                const knifeCharges = document.getElementById('knife-charges');
+                const currentCharges = parseInt(knifeCharges.textContent);
+
+                if (currentCharges > 0) {
+                    knifeCharges.textContent = currentCharges - 1;
+                    this.updateHealth();
+                    this.updateCreatureHunger(-20); // Decrease hunger by 20%
+                    return "You slice off a piece of yourself. The creature seems... momentarily satisfied.";
+                }
+                return "You've already sacrificed too much of yourself!";
+            }
+
+            lookOutWindow() {
+                this.lookActions++;
+                if (this.lookActions > 2) {
+                    if (this.isBunnyHour()) {
+                        this.updateCreatureHunger(-40);
+                        return "You spot a bunny outside. The creature goes to eat it, reducing its hunger.";
+                    } else {
+                        alert("The creature hears you trying to escape and enters the room. You've been eaten!");
+                        location.reload();
+                        return;
+                    }
+                }
+                return "You peer out the window but see nothing of interest.";
+            }
+
+            listenAtDoor() {
+                this.lookActions++;
+                if (this.lookActions > 2) {
+                    if (this.isBunnyHour()) {
+                        this.updateCreatureHunger(-40);
+                        return "You hear a bunny outside. The creature goes to eat it, reducing its hunger.";
+                    } else {
+                        alert("The creature hears you trying to escape and enters the room. You've been eaten!");
+                        location.reload();
+                        return;
+                    }
+                }
+                return "You press your ear against the door but only hear the creature's breathing.";
+            }
+
+            isBunnyHour() {
+                return this.currentHour === 2 || this.currentHour === 7;
+            }
+
+            getCreatureStory() {
+                const stories = [
+                    "\"I come from Mars, I was banished by my people.\"",
+                    "\"I found human beings the tastiest, but I have eaten so many that I feel sympathy for them now.\"",
+                    "\"I feel as if I am banishing them from life, as I was banished.\""
+                ];
+                return stories[this.distractCount];
+            }
+
+            remainSilent() {
+                this.updateCreatureHunger(40); // Increase hunger by 40%
+                return "Silence fills the room. The creature's anticipation and hunger grow.";
+            }
+
+            advanceHour() {
+                this.currentHour++;
+                this.updateTimeProgress();
+                document.getElementById('current-hour').textContent = this.currentHour;
+                this.lookActions = 0; // Reset look/listen actions per hour
+
+                if (this.currentHour > 8) {
+                    alert("Congratulations! You survived until rescue!");
+                    location.reload();
+                }
+            }
+
+            updateTimeProgress() {
+                const timeProgress = document.getElementById('time-progress');
+                timeProgress.style.width = `${(this.currentHour / 8) * 100}%`;
+            }
+
+            updateCreatureHunger(modifier) {
+                this.creatureHunger += modifier;
+                this.creatureHunger = Math.min(Math.max(this.creatureHunger, 0), 100);
+                const creatureProgress = document.getElementById('creature-progress');
+                creatureProgress.style.width = this.creatureHunger + '%';
+
+                if (this.creatureHunger >= 100) {
+                    alert("The creature's hunger overwhelms it. You've been eaten!");
+                    location.reload();
+                }
+            }
+
+            updateHealth() {
+                const healthProgress = document.getElementById('health-progress');
+                let health = parseInt(healthProgress.style.width) || 100;
+                health -= 33;
+                healthProgress.style.width = `${Math.max(health, 0)}%`;
+
+                if (health <= 0) {
+                    alert("You've sacrificed too much... you succumb to your injuries.");
+                    location.reload();
+                }
+            }
+        }
+
+        new SurviveTheNight();
+    </script>
+</body>
+</html>
